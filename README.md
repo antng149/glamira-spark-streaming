@@ -154,15 +154,13 @@ docker run --rm -ti --name glamira-streaming \
 -e HADOOP_CONF_DIR=/spark/hadoop-conf/ \
 -e PYSPARK_DRIVER_PYTHON='python' \
 -e PYSPARK_PYTHON='./environment/bin/python' \
-unigap/spark:3.5 bash -c "(cd /spark/99-project && zip -r /tmp/browser.zip browser/*) &&
-conda env create --file /spark/environment.yml &&
+unigap/spark:3.5 bash -c "conda env create --file /spark/environment.yml &&
 source ~/miniconda3/bin/activate &&
 conda activate pyspark_conda_env &&
 conda pack -f -o pyspark_conda_env.tar.gz &&
 spark-submit \
 --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,org.postgresql:postgresql:42.7.3 \
 --conf spark.yarn.dist.archives=pyspark_conda_env.tar.gz#environment \
---py-files /tmp/browser.zip \
 --deploy-mode client \
 --master yarn \
 /spark/99-project/kafka_streaming.py"
