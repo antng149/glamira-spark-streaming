@@ -141,8 +141,6 @@ docker exec -it hadoop-namenode-1 hdfs dfs -chmod 777 /
 ### 3. Run the Spark streaming pipeline
 
 ```bash
-cd /path/to/spark
-
 docker container stop glamira-streaming 2>/dev/null || true
 docker container rm glamira-streaming 2>/dev/null || true
 
