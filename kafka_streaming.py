@@ -1,3 +1,4 @@
+import os
 import psycopg2
 from urllib.parse import urlparse
 from pyspark.sql import SparkSession
@@ -13,12 +14,21 @@ from datetime import datetime
 # POSTGRES CONFIG
 # ─────────────────────────────────────────
 PG_CONN = {
-    "host":     "postgres",
-    "port":     5432,
-    "dbname":   "postgres",
-    "user":     "postgres",
-    "password": "UnigapPostgres@123"
+    "host":     os.getenv("PG_HOST", "postgres"),
+    "port":     int(os.getenv("PG_PORT", "5432")),
+    "dbname":   os.getenv("PG_DB", "postgres"),
+    "user":     os.getenv("PG_USER", "postgres"),
+    "password": os.getenv("PG_PASSWORD", "UnigapPostgres@123")
 }
+
+# ─────────────────────────────────────────
+# KAFKA CONFIG
+# ─────────────────────────────────────────
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "46.202.167.130:9094,46.202.167.130:9194,46.202.167.130:9294")
+KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL", "SASL_PLAINTEXT")
+KAFKA_SASL_MECHANISM    = os.getenv("KAFKA_SASL_MECHANISM", "PLAIN")
+KAFKA_SASL_JAAS_CONFIG  = os.getenv("KAFKA_SASL_JAAS_CONFIG", 'org.apache.kafka.common.security.plain.PlainLoginModule required username="kafka" password="UnigapKafka@2024";')
+KAFKA_TOPIC             = os.getenv("KAFKA_TOPIC", "product_view")
 
 # ─────────────────────────────────────────
 # KAFKA SCHEMA
@@ -111,19 +121,21 @@ def process_dim_device(df):
     ).distinct()
 
 def store_dim_device(df):
-    conn = psycopg2.connect(**PG_CONN)
-    try:
-        cursor = conn.cursor()
-        for row in df.collect():
-            cursor.execute("""
-                INSERT INTO dim_device (browser, os, device_type)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (browser, os, device_type) DO NOTHING
-            """, (row["browser"], row["os"], row["device_type"]))
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
+    def write_partition(rows):
+        conn = psycopg2.connect(**PG_CONN)
+        try:
+            cursor = conn.cursor()
+            for row in rows:
+                cursor.execute("""
+                    INSERT INTO dim_device (browser, os, device_type)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (browser, os, device_type) DO NOTHING
+                """, (row["browser"], row["os"], row["device_type"]))
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
+    df.foreachPartition(write_partition)
 
 # ─────────────────────────────────────────
 # DIM DATE
@@ -164,19 +176,21 @@ def process_dim_product(df):
              .distinct()
 
 def store_dim_product(df):
-    conn = psycopg2.connect(**PG_CONN)
-    try:
-        cursor = conn.cursor()
-        for row in df.collect():
-            cursor.execute("""
-                INSERT INTO dim_product (product_id)
-                VALUES (%s)
-                ON CONFLICT (product_id) DO NOTHING
-            """, (row["product_id"],))
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
+    def write_partition(rows):
+        conn = psycopg2.connect(**PG_CONN)
+        try:
+            cursor = conn.cursor()
+            for row in rows:
+                cursor.execute("""
+                    INSERT INTO dim_product (product_id)
+                    VALUES (%s)
+                    ON CONFLICT (product_id) DO NOTHING
+                """, (row["product_id"],))
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
+    df.foreachPartition(write_partition)
 
 # ─────────────────────────────────────────
 # DIM STORE
@@ -187,19 +201,21 @@ def process_dim_store(df):
              .distinct()
 
 def store_dim_store(df):
-    conn = psycopg2.connect(**PG_CONN)
-    try:
-        cursor = conn.cursor()
-        for row in df.collect():
-            cursor.execute("""
-                INSERT INTO dim_store (store_id)
-                VALUES (%s)
-                ON CONFLICT (store_id) DO NOTHING
-            """, (row["store_id"],))
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
+    def write_partition(rows):
+        conn = psycopg2.connect(**PG_CONN)
+        try:
+            cursor = conn.cursor()
+            for row in rows:
+                cursor.execute("""
+                    INSERT INTO dim_store (store_id)
+                    VALUES (%s)
+                    ON CONFLICT (store_id) DO NOTHING
+                """, (row["store_id"],))
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
+    df.foreachPartition(write_partition)
 
 # ─────────────────────────────────────────
 # DIM REFERRER
@@ -211,19 +227,21 @@ def process_dim_referrer(df):
      .distinct()
 
 def store_dim_referrer(df):
-    conn = psycopg2.connect(**PG_CONN)
-    try:
-        cursor = conn.cursor()
-        for row in df.collect():
-            cursor.execute("""
-                INSERT INTO dim_referrer (referrer_domain)
-                VALUES (%s)
-                ON CONFLICT (referrer_domain) DO NOTHING
-            """, (row["referrer_domain"],))
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
+    def write_partition(rows):
+        conn = psycopg2.connect(**PG_CONN)
+        try:
+            cursor = conn.cursor()
+            for row in rows:
+                cursor.execute("""
+                    INSERT INTO dim_referrer (referrer_domain)
+                    VALUES (%s)
+                    ON CONFLICT (referrer_domain) DO NOTHING
+                """, (row["referrer_domain"],))
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
+    df.foreachPartition(write_partition)
 
 # ─────────────────────────────────────────
 # DIM LOCATION
@@ -236,120 +254,139 @@ def process_dim_location(df):
      .distinct()
 
 def store_dim_location(df):
-    conn = psycopg2.connect(**PG_CONN)
-    try:
-        cursor = conn.cursor()
-        for row in df.collect():
-            domain       = row["domain"]
-            country_code = extract_country_from_domain(domain)
-            cursor.execute("""
-                INSERT INTO dim_location (ip_address, country_code, domain)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (ip_address) DO NOTHING
-            """, (row["ip_address"], country_code, domain))
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
+    def write_partition(rows):
+        conn = psycopg2.connect(**PG_CONN)
+        try:
+            cursor = conn.cursor()
+            for row in rows:
+                domain       = row["domain"]
+                country_code = extract_country_from_domain(domain)
+                cursor.execute("""
+                    INSERT INTO dim_location (ip_address, country_code, domain)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (ip_address) DO NOTHING
+                """, (row["ip_address"], country_code, domain))
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
+    df.foreachPartition(write_partition)
 
 # ─────────────────────────────────────────
 # FACT TABLE
 # ─────────────────────────────────────────
-def store_fact(df):
-    conn = psycopg2.connect(**PG_CONN)
-    try:
-        cursor = conn.cursor()
-        for row in df.collect():
+def store_fact(df, spark):
+    # read dim tables from Postgres into Spark DataFrames
+    def read_dim(table):
+        return spark.read \
+            .format("jdbc") \
+            .option("driver", "org.postgresql.Driver") \
+            .option("url", f"jdbc:postgresql://{PG_CONN['host']}:{PG_CONN['port']}/{PG_CONN['dbname']}") \
+            .option("dbtable", table) \
+            .option("user", PG_CONN["user"]) \
+            .option("password", PG_CONN["password"]) \
+            .load()
 
-            # look up device_key
-            cursor.execute("""
-                SELECT device_key FROM dim_device
-                WHERE browser = %s AND os = %s AND device_type = %s
-            """, (
-                get_browser(row["user_agent"]),
-                get_os(row["user_agent"]),
-                get_device_type(row["user_agent"])
-            ))
-            result     = cursor.fetchone()
-            device_key = result[0] if result else None
+    # load dims
+    dim_device   = read_dim("dim_device")
+    dim_product  = read_dim("dim_product")
+    dim_store    = read_dim("dim_store")
+    dim_location = read_dim("dim_location")
+    dim_referrer = read_dim("dim_referrer")
+    dim_date     = read_dim("dim_date")
 
-            # look up date_key
-            date_key   = None
-            event_ts   = None
-            event_hour = None
-            try:
-                dt         = datetime.strptime(row["local_time"], "%Y-%m-%d %H:%M:%S")
-                date_key   = int(dt.strftime("%Y%m%d%H"))
-                event_ts   = dt
-                event_hour = dt.hour
-            except:
-                pass
+    # add parsed columns to df
+    from pyspark.sql.functions import (
+        to_timestamp, hour, date_format
+    )
 
-            # look up product_key
-            cursor.execute("""
-                SELECT product_key FROM dim_product
-                WHERE product_id = %s
-            """, (row["product_id"],))
-            result      = cursor.fetchone()
-            product_key = result[0] if result else None
+    enriched = df \
+        .withColumn("browser",      browser_udf(col("user_agent"))) \
+        .withColumn("os",           os_udf(col("user_agent"))) \
+        .withColumn("device_type",  device_type_udf(col("user_agent"))) \
+        .withColumn("domain",       domain_udf(col("current_url"))) \
+        .withColumn("referrer_domain", domain_udf(col("referrer_url"))) \
+        .withColumn("event_ts",     to_timestamp(col("local_time"), "yyyy-MM-dd HH:mm:ss")) \
+        .withColumn("event_hour",   hour(col("event_ts"))) \
+        .withColumn("date_key",     date_format(col("event_ts"), "yyyyMMddHH").cast("int"))
 
-            # look up store_key
-            cursor.execute("""
-                SELECT store_key FROM dim_store
-                WHERE store_id = %s
-            """, (row["store_id"],))
-            result    = cursor.fetchone()
-            store_key = result[0] if result else None
+    # JOIN to get all foreign keys
+    fact = enriched \
+        .join(dim_device,
+              (enriched.browser     == dim_device.browser) &
+              (enriched.os          == dim_device.os) &
+              (enriched.device_type == dim_device.device_type),
+              "left") \
+        .join(dim_product,
+              enriched.product_id == dim_product.product_id,
+              "left") \
+        .join(dim_store,
+              enriched.store_id == dim_store.store_id,
+              "left") \
+        .join(dim_location,
+              enriched.ip == dim_location.ip_address,
+              "left") \
+        .join(dim_referrer,
+              enriched.referrer_domain == dim_referrer.referrer_domain,
+              "left") \
+        .select(
+            enriched.id.alias("view_id"),
+            enriched.date_key,
+            dim_product.product_key,
+            dim_store.store_key,
+            dim_location.location_key,
+            dim_device.device_key,
+            dim_referrer.referrer_key,
+            enriched.event_ts,
+            enriched.event_hour,
+            enriched.time_stamp,
+            enriched.current_url,
+            enriched.referrer_url,
+            enriched.ip.alias("ip_address"),
+            enriched.collection,
+            enriched.api_version
+        )
 
-            # look up location_key
-            cursor.execute("""
-                SELECT location_key FROM dim_location
-                WHERE ip_address = %s
-            """, (row["ip"],))
-            result       = cursor.fetchone()
-            location_key = result[0] if result else None
+    # write using foreachPartition
+    def write_partition(rows):
+        conn = psycopg2.connect(**PG_CONN)
+        try:
+            cursor = conn.cursor()
+            for row in rows:
+                cursor.execute("""
+                    INSERT INTO fact_product_view (
+                        view_id, date_key, product_key, store_key,
+                        location_key, device_key, referrer_key,
+                        event_ts, event_hour, time_stamp,
+                        current_url, referrer_url, ip_address,
+                        collection, api_version, ingested_at
+                    )
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (view_id) DO NOTHING
+                """, (
+                    row["view_id"],
+                    row["date_key"],
+                    row["product_key"],
+                    row["store_key"],
+                    row["location_key"],
+                    row["device_key"],
+                    row["referrer_key"],
+                    row["event_ts"],
+                    row["event_hour"],
+                    row["time_stamp"],
+                    row["current_url"],
+                    row["referrer_url"],
+                    row["ip_address"],
+                    row["collection"],
+                    row["api_version"],
+                    datetime.utcnow()
+                ))
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
 
-            # look up referrer_key
-            referrer_domain = extract_domain(row["referrer_url"])
-            cursor.execute("""
-                SELECT referrer_key FROM dim_referrer
-                WHERE referrer_domain = %s
-            """, (referrer_domain,))
-            result       = cursor.fetchone()
-            referrer_key = result[0] if result else None
-
-            cursor.execute("""
-                INSERT INTO fact_product_view (
-                    view_id, date_key, product_key, store_key,
-                    location_key, device_key, referrer_key,
-                    event_ts, event_hour, time_stamp,
-                    current_url, referrer_url, ip_address,
-                    collection, api_version, ingested_at
-                )
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                ON CONFLICT (view_id) DO NOTHING
-            """, (
-                row["id"],
-                date_key,
-                product_key,
-                store_key,
-                location_key,
-                device_key,
-                referrer_key,
-                event_ts,
-                event_hour,
-                row["time_stamp"],
-                row["current_url"],
-                row["referrer_url"],
-                row["ip"],
-                row["collection"],
-                row["api_version"],
-                datetime.utcnow()
-            ))
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
+    fact.foreachPartition(write_partition)
 
 # ─────────────────────────────────────────
 # FOREACH BATCH
@@ -366,7 +403,6 @@ def process_batch(df, batch_id):
 
     parsed_df.cache()
 
-    # dims first
     store_dim_device(process_dim_device(parsed_df))
     store_dim_date(process_dim_date(parsed_df))
     store_dim_product(process_dim_product(parsed_df))
@@ -374,8 +410,8 @@ def process_batch(df, batch_id):
     store_dim_referrer(process_dim_referrer(parsed_df))
     store_dim_location(process_dim_location(parsed_df))
 
-    # fact last — all keys are now available
-    store_fact(parsed_df)
+    # pass spark session to store_fact
+    store_fact(parsed_df, df.sparkSession)
 
     parsed_df.unpersist()
     print(f"Batch {batch_id} done")
@@ -390,15 +426,12 @@ if __name__ == "__main__":
 
     kafka_df = spark.readStream \
         .format("kafka") \
-        .option("kafka.bootstrap.servers",
-                "46.202.167.130:9094,46.202.167.130:9194,46.202.167.130:9294") \
-        .option("subscribe", "product_view") \
-        .option("startingOffsets", "latest") \
-        .option("kafka.security.protocol", "SASL_PLAINTEXT") \
-        .option("kafka.sasl.mechanism", "PLAIN") \
-        .option("kafka.sasl.jaas.config",
-                'org.apache.kafka.common.security.plain.PlainLoginModule required '
-                'username="kafka" password="UnigapKafka@2024";') \
+        .option("kafka.bootstrap.servers",  KAFKA_BOOTSTRAP_SERVERS) \
+        .option("subscribe",                KAFKA_TOPIC) \
+        .option("startingOffsets",          "latest") \
+        .option("kafka.security.protocol",  KAFKA_SECURITY_PROTOCOL) \
+        .option("kafka.sasl.mechanism",     KAFKA_SASL_MECHANISM) \
+        .option("kafka.sasl.jaas.config",   KAFKA_SASL_JAAS_CONFIG) \
         .load()
 
     query = kafka_df \

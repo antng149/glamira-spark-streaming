@@ -196,3 +196,4 @@ pyspark_conda_env.tar.gz
 *.tar.gz
 pyspark_conda_env.tar.gz
 .DS_Store
+.env

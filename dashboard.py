@@ -1,15 +1,19 @@
 
+import os
 import streamlit as st
 import psycopg2
 import pandas as pd
 import time
+from dotenv import load_dotenv
+
+load_dotenv()
 
 PG_CONN = {
-    "host":     "localhost",
-    "port":     5432,
-    "dbname":   "postgres",
-    "user":     "postgres",
-    "password": "UnigapPostgres@123"
+    "host":     os.getenv("PG_HOST", "localhost"),
+    "port":     int(os.getenv("PG_PORT", 5432)),
+    "dbname":   os.getenv("PG_DB", "postgres"),
+    "user":     os.getenv("PG_USER", "postgres"),
+    "password": os.getenv("PG_PASSWORD")
 }
 
 st.set_page_config(page_title="Glamira Real-Time Dashboard", page_icon="💎", layout="wide")
